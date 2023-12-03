@@ -1,0 +1,140 @@
+service: appsync-decoupling-sample
+frameworkVersion: "3"
+
+plugins:
+  - serverless-appsync-plugin
+  - serverless-esbuild
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: eu-central-1
+
+custom:
+  base: ${self:service}-${sls:stage}
+
+appSync:
+  name: ${self:custom.base}-appsync
+  logging:
+    level: ALL
+    retentionInDays: 1
+  xrayEnabled: true
+  authentication:
+    type: AWS_IAM
+  additionalAuthentications:
+    - type: API_KEY
+  apiKeys:
+    - ${self:custom.base}-key
+  substitutions:
+    accountId:
+      Ref: AWS::AccountId
+    queueName: decoupling-sqs
+  dataSources:
+    localResolverDS:
+      type: "NONE"
+    sqsDS:
+      type: "HTTP"
+      config:
+        endpoint: !Sub https://sqs.${AWS::Region}.amazonaws.com/
+        iamRoleStatements:
+          - Effect: "Allow"
+            Action:
+              - "sqs:*"
+            Resource:
+              Fn::GetAtt:
+                - MyQueue
+                - Arn
+        authorizationConfig:
+          authorizationType: AWS_IAM
+          awsIamConfig:
+            signingRegion:
+              Ref: AWS::Region
+            signingServiceName: sqs
+  resolvers:
+    Query.getSessionId:
+      kind: UNIT
+      dataSource: localResolverDS
+      code: "./src/appsync/getSession.js"
+    Mutation.sendPrompt:
+      kind: UNIT
+      dataSource: sqsDS
+      code: "./src/appsync/sendPrompt.js"
+    Mutation.streamedResponse:
+      kind: UNIT
+      dataSource: localResolverDS
+      code: "./src/appsync/streamedResponse.js"
+
+functions:
+  sqsHandler:
+    handler: src/decoupled.handler
+    role: LambdaRole
+    logRetentionInDays: 1
+    environment:
+      GRAPHQL_ENDPOINT: { Fn::GetAtt: [GraphQlApi, GraphQLUrl] }
+      REGION:
+        Ref: AWS::Region
+    events:
+      - sqs:
+          arn:
+            Fn::GetAtt:
+              - MyQueue
+              - Arn
+          batchSize: 1
+
+resources:
+  Resources:
+    MyQueue:
+      Type: "AWS::SQS::Queue"
+      Properties:
+        QueueName: decoupling-sqs
+        VisibilityTimeout: 300
+    LambdaRole:
+      Type: "AWS::IAM::Role"
+      Properties:
+        RoleName: ${self:custom.base}-LambdaRole-role
+        AssumeRolePolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Principal:
+                Service:
+                  - "lambda.amazonaws.com"
+              Action:
+                - "sts:AssumeRole"
+        Policies:
+          - PolicyName: ${self:custom.base}-amazoncloudwatch-policy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "logs:CreateLogGroup"
+                    - "logs:CreateLogStream"
+                    - "logs:PutLogEvents"
+                  Resource: "*"
+          - PolicyName: ${self:custom.base}-sqs-policy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "sqs:*"
+                  Resource: "*"
+          - PolicyName: ${self:custom.base}-appsync-policy
+            PolicyDocument:
+              Version: "2012-10-17"
+              Statement:
+                - Effect: "Allow"
+                  Action:
+                    - "appsync:GraphQL"
+                  Resource:
+                    Fn::Join:
+                      - ""
+                      - - "arn:aws:appsync:${self:provider.region}:"
+                        - Ref: AWS::AccountId
+                        - ":apis/"
+                        - Fn::GetAtt:
+                            - GraphQlApi
+                            - ApiId
+                        - "/*"

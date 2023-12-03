@@ -1,0 +1,26 @@
+{
+  "name": "appsync-decoupling-sample",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@aws-appsync/utils": "^1.6.0",
+    "esbuild": "^0.19.8",
+    "serverless": "^3.38.0",
+    "serverless-appsync-plugin": "^2.5.2",
+    "serverless-esbuild": "^1.49.0"
+  },
+  "dependencies": {
+    "@aws-crypto/sha256-js": "^5.2.0",
+    "@aws-sdk/credential-provider-node": "^3.465.0",
+    "@aws-sdk/protocol-http": "^3.374.0",
+    "@aws-sdk/signature-v4": "^3.374.0",
+    "node-fetch": "^3.3.2"
+  }
+}

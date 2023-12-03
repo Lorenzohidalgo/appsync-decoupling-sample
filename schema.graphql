@@ -1,0 +1,43 @@
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}
+
+type Query @aws_api_key @aws_iam {
+  getSessionId: ID!
+}
+
+type Mutation {
+  sendPrompt(userPrompt: userPrompt!): promptResponse @aws_api_key @aws_iam
+  streamedResponse(streamedResponseInput: StreamedResponseInput!): StreamedResponse @aws_iam
+}
+
+type Subscription @aws_api_key @aws_iam {
+  onStreamedResponse(sessionId: ID!): StreamedResponse @aws_subscribe(mutations: ["streamedResponse"])
+}
+
+input userPrompt {
+  sessionId: ID!
+  prompt: String!
+}
+
+type promptResponse @aws_api_key @aws_iam {
+  sessionId: ID!
+  messageId: ID!
+  prompt: String!
+}
+
+input StreamedResponseInput {
+  sessionId: ID!
+  messageId: ID!
+  completed: Boolean!
+  response: String
+}
+
+type StreamedResponse @aws_api_key @aws_iam {
+  sessionId: ID!
+  messageId: ID!
+  completed: Boolean!
+  response: String
+}
